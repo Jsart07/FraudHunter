@@ -11,11 +11,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# Conexión con Supabase
-@st.cache_resource
+# Conexión limpia con Supabase (sin caché para evitar guardar errores de DNS pasados)
 def init_supabase():
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
+    url = st.secrets["SUPABASE_URL"].strip()
+    key = st.secrets["SUPABASE_KEY"].strip()
     return create_client(url, key)
 
 supabase = init_supabase()
