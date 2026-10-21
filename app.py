@@ -11,13 +11,18 @@ st.set_page_config(
     layout="wide"
 )
 
-# Conexión limpia con Supabase (sin caché para evitar guardar errores de DNS pasados)
-def init_supabase():
-    url = st.secrets["SUPABASE_URL"].strip()
-    key = st.secrets["SUPABASE_KEY"].strip()
-    return create_client(url, key)
+st.title("🛡️ FraudHunter")
+st.caption("SISTEMA INTELIGENTE DE DETECCIÓN Y EVALUACIÓN DE RIESGO EN TIEMPO REAL (BD CONECTADA)")
 
-supabase = init_supabase()
+# Lectura limpia de Secrets
+try:
+    url = str(st.secrets["SUPABASE_URL"]).strip().replace('"', '').replace("'", "")
+    key = str(st.secrets["SUPABASE_KEY"]).strip().replace('"', '').replace("'", "")
+    
+    # Cliente directo de Supabase
+    supabase = create_client(url, key)
+except Exception as e:
+    st.error(f"⚠️ Error al leer credenciales desde Secrets: {e}")
 
 # Cargar datos desde Supabase
 def load_data():
@@ -25,15 +30,11 @@ def load_data():
         response = supabase.table("transacciones").select("*").execute()
         df = pd.DataFrame(response.data)
         if df.empty:
-            # Carga de respaldo si la BD está vacía
             return pd.read_csv("dataset_fraud_hunter_10k.csv")
         return df
     except Exception as e:
         st.error(f"Error al conectar con la base de datos: {e}")
         return pd.read_csv("dataset_fraud_hunter_10k.csv")
-
-st.title("🛡️ FraudHunter")
-st.caption("SISTEMA INTELIGENTE DE DETECCIÓN Y EVALUACIÓN DE RIESGO EN TIEMPO REAL (BD CONECTADA)")
 
 df = load_data()
 
