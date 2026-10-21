@@ -2,7 +2,8 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 from datetime import datetime
-from supabase import create_client
+import urllib.request
+import json
 
 # Configuración de página
 st.set_page_config(
@@ -12,40 +13,55 @@ st.set_page_config(
 )
 
 st.title("🛡️ FraudHunter")
-st.caption("SISTEMA INTELIGENTE DE DETECCIÓN Y EVALUACIÓN DE RIESGO EN TIEMPO REAL (BD CONECTADA)")
+st.caption("SISTEMA INTELIGENTE DE DETECCIÓN Y EVALUACIÓN DE RIESGO EN TIEMPO REAL")
 
-# Lectura limpia de credenciales
-url = str(st.secrets.get("SUPABASE_URL", "")).strip().strip('"').strip("'")
-key = str(st.secrets.get("SUPABASE_KEY", "")).strip().strip('"').strip("'")
+# Credenciales desde Secrets
+raw_url = str(st.secrets.get("SUPABASE_URL", "")).strip().strip('"').strip("'")
+raw_key = str(st.secrets.get("SUPABASE_KEY", "")).strip().strip('"').strip("'")
 
-# Inicializar cliente de Supabase
-@st.cache_resource(show_spinner=False)
-def get_supabase_client(u, k):
-    return create_client(u, k)
+# Estado de Conexión en la barra lateral
+st.sidebar.header("🔌 Diagnóstico de Base de Datos")
+if st.sidebar.button("🔍 Probar Conexión Supabase"):
+    try:
+        req = urllib.request.Request(
+            f"{raw_url}/rest/v1/transacciones?select=count",
+            headers={
+                "apikey": raw_key,
+                "Authorization": f"Bearer {raw_key}"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            if response.status in [200, 206]:
+                st.sidebar.success("✅ ¡Conexión Exitosa con Supabase!")
+            else:
+                st.sidebar.error(f"❌ Respuesta HTTP: {response.status}")
+    except Exception as err:
+        st.sidebar.error(f"❌ Fallo de Conexión: {err}")
 
-try:
-    supabase = get_supabase_client(url, key)
-except Exception as e:
-    st.error(f"Error al inicializar Supabase: {e}")
-
-# Cargar datos desde Supabase
+# Cargar datos desde Supabase mediante urllib (evita bloqueos de supabase-py)
 def load_data():
     try:
-        response = supabase.table("transacciones").select("*").execute()
-        df = pd.DataFrame(response.data)
-        if df.empty:
-            df = pd.read_csv("dataset_fraud_hunter_10k.csv")
-            st.warning("⚠️ La tabla de Supabase está vacía. Mostrando datos de respaldo (CSV).")
-        else:
-            st.toast("✅ Datos cargados desde Supabase PostgreSQL", icon="🔥")
-        return df
+        endpoint = f"{raw_url}/rest/v1/transacciones?select=*"
+        req = urllib.request.Request(
+            endpoint,
+            headers={
+                "apikey": raw_key,
+                "Authorization": f"Bearer {raw_key}"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode())
+            df = pd.DataFrame(data)
+            if df.empty:
+                return pd.read_csv("dataset_fraud_hunter_10k.csv")
+            return df
     except Exception as e:
-        st.error(f"⚠️ No se pudo consultar Supabase ({e}). Usando CSV local de respaldo.")
+        st.warning(f"⚠️ No se pudo consultar Supabase ({e}). Usando CSV local de respaldo.")
         return pd.read_csv("dataset_fraud_hunter_10k.csv")
 
 df = load_data()
 
-# Asegurar formateo numérico de la columna 'monto'
+# Asegurar formateo numérico
 if not df.empty and "monto" in df.columns:
     df["monto"] = pd.to_numeric(df["monto"], errors="coerce").fillna(0)
 
@@ -124,7 +140,7 @@ with tab2:
     else:
         st.success(f"✅ **{estado_eval}** | Nivel de Riesgo: **{score_riesgo}%**")
 
-    # Guardar permanentemente en Supabase
+    # Guardar en Supabase usando urllib
     if st.button("📌 Guardar en Base de Datos Supabase"):
         nueva_tx = {
             "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -137,10 +153,20 @@ with tab2:
         }
         
         try:
-            supabase.table("transacciones").insert(nueva_tx).execute()
-            st.toast("¡Guardado permanentemente en la base de datos!", icon="✅")
-            st.cache_resource.clear()
-            st.rerun()
+            req = urllib.request.Request(
+                f"{raw_url}/rest/v1/transacciones",
+                data=json.dumps(nueva_tx).encode('utf-8'),
+                headers={
+                    "apikey": raw_key,
+                    "Authorization": f"Bearer {raw_key}",
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal"
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=5) as res:
+                st.toast("¡Guardado permanentemente en la base de datos!", icon="✅")
+                st.rerun()
         except Exception as e:
             st.error(f"❌ Error al intentar guardar en Supabase: {e}")
 
