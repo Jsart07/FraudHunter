@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 from datetime import datetime
-from supabase import create_client, ClientOptions
+from supabase import create_client
 
 # Configuración de página
 st.set_page_config(
@@ -14,14 +14,11 @@ st.set_page_config(
 st.title("🛡️ FraudHunter")
 st.caption("SISTEMA INTELIGENTE DE DETECCIÓN Y EVALUACIÓN DE RIESGO EN TIEMPO REAL (BD CONECTADA)")
 
-# Lectura directa
-raw_url = st.secrets.get("SUPABASE_URL", "").strip().strip('"').strip("'")
-raw_key = st.secrets.get("SUPABASE_KEY", "").strip().strip('"').strip("'")
+# Lectura ultra limpia de variables
+raw_url = str(st.secrets.get("SUPABASE_URL", "")).strip().strip('"').strip("'")
+raw_key = str(st.secrets.get("SUPABASE_KEY", "")).strip().strip('"').strip("'")
 
-# Forzar URL limpia
-if not raw_url.startswith("https://"):
-    raw_url = f"https://{raw_url}"
-
+# Crear cliente de Supabase
 try:
     supabase = create_client(raw_url, raw_key)
 except Exception as e:
@@ -36,7 +33,9 @@ def load_data():
             return pd.read_csv("dataset_fraud_hunter_10k.csv")
         return df
     except Exception as e:
+        # Muestra la URL procesada en pantalla para diagnosticar cualquier desviación
         st.error(f"Error al conectar con la base de datos: {e}")
+        st.warning(f"URL procesada: `{raw_url}`")
         return pd.read_csv("dataset_fraud_hunter_10k.csv")
 
 df = load_data()
