@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 from datetime import datetime
-from supabase import create_client
+from supabase import create_client, ClientOptions
 
 # Configuración de página
 st.set_page_config(
@@ -14,15 +14,18 @@ st.set_page_config(
 st.title("🛡️ FraudHunter")
 st.caption("SISTEMA INTELIGENTE DE DETECCIÓN Y EVALUACIÓN DE RIESGO EN TIEMPO REAL (BD CONECTADA)")
 
-# Lectura limpia de Secrets
+# Lectura directa
+raw_url = st.secrets.get("SUPABASE_URL", "").strip().strip('"').strip("'")
+raw_key = st.secrets.get("SUPABASE_KEY", "").strip().strip('"').strip("'")
+
+# Forzar URL limpia
+if not raw_url.startswith("https://"):
+    raw_url = f"https://{raw_url}"
+
 try:
-    url = str(st.secrets["SUPABASE_URL"]).strip().replace('"', '').replace("'", "")
-    key = str(st.secrets["SUPABASE_KEY"]).strip().replace('"', '').replace("'", "")
-    
-    # Cliente directo de Supabase
-    supabase = create_client(url, key)
+    supabase = create_client(raw_url, raw_key)
 except Exception as e:
-    st.error(f"⚠️ Error al leer credenciales desde Secrets: {e}")
+    st.error(f"Error al inicializar cliente Supabase: {e}")
 
 # Cargar datos desde Supabase
 def load_data():
