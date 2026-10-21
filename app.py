@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 import plotly.express as px
 from datetime import datetime
-import requests
+from supabase import create_client
 
 # Configuración de página
 st.set_page_config(
@@ -14,37 +14,40 @@ st.set_page_config(
 st.title("🛡️ FraudHunter")
 st.caption("SISTEMA INTELIGENTE DE DETECCIÓN Y EVALUACIÓN DE RIESGO EN TIEMPO REAL (BD CONECTADA)")
 
-# Credenciales desde Secrets
-raw_key = str(st.secrets.get("SUPABASE_KEY", "")).strip().strip('"').strip("'")
+# Lectura limpia de credenciales
+url = str(st.secrets.get("SUPABASE_URL", "")).strip().strip('"').strip("'")
+key = str(st.secrets.get("SUPABASE_KEY", "")).strip().strip('"').strip("'")
 
-# Conexión por IP directa para evitar bloqueos de DNS en Streamlit Cloud
-SUPABASE_IP_URL = "https://18.225.176.60"
+# Inicializar cliente de Supabase
+@st.cache_resource(show_spinner=False)
+def get_supabase_client(u, k):
+    return create_client(u, k)
 
-headers = {
-    "apikey": raw_key,
-    "Authorization": f"Bearer {raw_key}",
-    "Content-Type": "application/json",
-    "Prefer": "return=minimal",
-    "Host": "vhpqxzkushoxamypnby.supabase.co"
-}
+try:
+    supabase = get_supabase_client(url, key)
+except Exception as e:
+    st.error(f"Error al inicializar Supabase: {e}")
 
-# Cargar datos mediante REST API con IP directa
+# Cargar datos desde Supabase
 def load_data():
     try:
-        endpoint = f"{SUPABASE_IP_URL}/rest/v1/transacciones?select=*"
-        response = requests.get(endpoint, headers=headers, timeout=10, verify=False)
-        if response.status_code == 200:
-            data = response.json()
-            df = pd.DataFrame(data)
-            if df.empty:
-                return pd.read_csv("dataset_fraud_hunter_10k.csv")
-            return df
+        response = supabase.table("transacciones").select("*").execute()
+        df = pd.DataFrame(response.data)
+        if df.empty:
+            df = pd.read_csv("dataset_fraud_hunter_10k.csv")
+            st.warning("⚠️ La tabla de Supabase está vacía. Mostrando datos de respaldo (CSV).")
         else:
-            return pd.read_csv("dataset_fraud_hunter_10k.csv")
-    except Exception:
+            st.toast("✅ Datos cargados desde Supabase PostgreSQL", icon="🔥")
+        return df
+    except Exception as e:
+        st.error(f"⚠️ No se pudo consultar Supabase ({e}). Usando CSV local de respaldo.")
         return pd.read_csv("dataset_fraud_hunter_10k.csv")
 
 df = load_data()
+
+# Asegurar formateo numérico de la columna 'monto'
+if not df.empty and "monto" in df.columns:
+    df["monto"] = pd.to_numeric(df["monto"], errors="coerce").fillna(0)
 
 # Pestañas principales
 tab1, tab2, tab3 = st.tabs(["📊 Dashboard General", "⚡ Evaluador en Vivo", "📜 Historial de Operaciones"])
@@ -121,7 +124,7 @@ with tab2:
     else:
         st.success(f"✅ **{estado_eval}** | Nivel de Riesgo: **{score_riesgo}%**")
 
-    # Guardar permanentemente en Supabase vía API REST
+    # Guardar permanentemente en Supabase
     if st.button("📌 Guardar en Base de Datos Supabase"):
         nueva_tx = {
             "fecha": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -134,15 +137,12 @@ with tab2:
         }
         
         try:
-            endpoint_insert = f"{SUPABASE_IP_URL}/rest/v1/transacciones"
-            res = requests.post(endpoint_insert, headers=headers, json=nueva_tx, timeout=10, verify=False)
-            if res.status_code in [200, 201]:
-                st.toast("¡Guardado permanentemente en la base de datos!", icon="✅")
-                st.rerun()
-            else:
-                st.error(f"Error al guardar ({res.status_code}): {res.text}")
+            supabase.table("transacciones").insert(nueva_tx).execute()
+            st.toast("¡Guardado permanentemente en la base de datos!", icon="✅")
+            st.cache_resource.clear()
+            st.rerun()
         except Exception as e:
-            st.error(f"Error de conexión al guardar: {e}")
+            st.error(f"❌ Error al intentar guardar en Supabase: {e}")
 
 # --- TAB 3: HISTORIAL ---
 with tab3:
