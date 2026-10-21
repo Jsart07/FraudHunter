@@ -14,23 +14,25 @@ st.set_page_config(
 st.title("🛡️ FraudHunter")
 st.caption("SISTEMA INTELIGENTE DE DETECCIÓN Y EVALUACIÓN DE RIESGO EN TIEMPO REAL (BD CONECTADA)")
 
-# Lectura limpia de credenciales desde Secrets
-url = str(st.secrets.get("SUPABASE_URL", "")).strip().strip('"').strip("'")
-key = str(st.secrets.get("SUPABASE_KEY", "")).strip().strip('"').strip("'")
+# Credenciales desde Secrets
+raw_key = str(st.secrets.get("SUPABASE_KEY", "")).strip().strip('"').strip("'")
 
-# Headers requeridos por Supabase
+# Conexión por IP directa para evitar bloqueos de DNS en Streamlit Cloud
+SUPABASE_IP_URL = "https://18.225.176.60"
+
 headers = {
-    "apikey": key,
-    "Authorization": f"Bearer {key}",
+    "apikey": raw_key,
+    "Authorization": f"Bearer {raw_key}",
     "Content-Type": "application/json",
-    "Prefer": "return=minimal"
+    "Prefer": "return=minimal",
+    "Host": "vhpqxzkushoxamypnby.supabase.co"
 }
 
-# Cargar datos mediante REST API directa
+# Cargar datos mediante REST API con IP directa
 def load_data():
     try:
-        endpoint = f"{url}/rest/v1/transacciones?select=*"
-        response = requests.get(endpoint, headers=headers, timeout=5)
+        endpoint = f"{SUPABASE_IP_URL}/rest/v1/transacciones?select=*"
+        response = requests.get(endpoint, headers=headers, timeout=10, verify=False)
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data)
@@ -39,7 +41,7 @@ def load_data():
             return df
         else:
             return pd.read_csv("dataset_fraud_hunter_10k.csv")
-    except Exception as e:
+    except Exception:
         return pd.read_csv("dataset_fraud_hunter_10k.csv")
 
 df = load_data()
@@ -132,8 +134,8 @@ with tab2:
         }
         
         try:
-            endpoint_insert = f"{url}/rest/v1/transacciones"
-            res = requests.post(endpoint_insert, headers=headers, json=nueva_tx, timeout=5)
+            endpoint_insert = f"{SUPABASE_IP_URL}/rest/v1/transacciones"
+            res = requests.post(endpoint_insert, headers=headers, json=nueva_tx, timeout=10, verify=False)
             if res.status_code in [200, 201]:
                 st.toast("¡Guardado permanentemente en la base de datos!", icon="✅")
                 st.rerun()
