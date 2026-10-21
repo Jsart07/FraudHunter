@@ -111,7 +111,25 @@ with tab2:
         hora_input = st.slider("Hora de la Operación (0-23h)", 0, 23, 2)
 
     with col_b:
-        ubicacion_input = st.selectbox("Ubicación", ["Bogotá, CO", "Medellín, CO", "Cali, CO", "Ubicación Desconocida / VPN"])
+        ubicacion_input = st.selectbox(
+    "Ubicación", 
+    [
+        "Bogotá, CO", 
+        "Medellín, CO", 
+        "Cali, CO", 
+        "Barranquilla, CO", 
+        "Cartagena, CO", 
+        "Bucaramanga, CO", 
+        "Pereira, CO", 
+        "Manizales, CO", 
+        "Cúcuta, CO", 
+        "Santa Marta, CO", 
+        "Ibagué, CO", 
+        "Pasto, CO", 
+        "Villavicencio, CO", 
+        "Ubicación Desconocida / VPN"
+    ]
+)
         origen_input = st.text_input("Cuenta / Cliente Origen", value="CLI-88492")
         score_input = st.slider("Score de Confianza del Usuario", 300, 850, 580)
 
